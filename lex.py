@@ -1,7 +1,7 @@
 p_reservadas = ["class", "else", "false", "fi", "if", "in", "inherits", "isvoid", "let", "loop", "pool", 
                 "then", "while", "case", "esac", "new", "of", "not", "true"]
 
-simbolos = [";", ")", "*", "+", "-"]
+simbolos = [";", ")", "*", "{", "}", "~", "@", "."] 
 
 lst_read = None
 
@@ -42,20 +42,34 @@ def lexico(arq):
         
         elif c == "(":
             proximo = pega_char(arq)
-            if c == "*":
+            if proximo == "*":
                 while True:
                     char_com = arq.read(1)
                     if not char_com: break
                     if char_com == "*":
                         if arq.read(1) == ")": break
                     if palavra: return palavra
-                    continue
+                    else: continue
             else:
                 lst_read = proximo
                 if palavra:
                     lst_read = "("
                     return palavra
                 return "("
+        
+        elif c == '"':
+            string = '"'
+            while True:
+                char_str = arq.read(1)
+                string += char_str
+                if not char_str: break
+                if char_str == '"': break
+
+            if palavra:
+                lst_read = string
+                return palavra
+            return string
+
 
 
 
