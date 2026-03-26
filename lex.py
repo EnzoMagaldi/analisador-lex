@@ -3,12 +3,8 @@ p_reservadas = ["class", "else", "false", "fi", "if", "in", "inherits", "isvoid"
 
 lst_read = None
 
-coments = [False,False]
-
-
 def lexico(arq):
     global lst_read
-    global coments
     palavra = "" 
 
     if lst_read == ";":
@@ -36,10 +32,19 @@ def lexico(arq):
             return ";"
         
         elif c == "-":
+            lst_read = c
             c = arq.read(1)
-            i = 0
             if c == "-":
                 while True:
+                    c = arq.read(1)
+                    if c == "-":
+                        c = arq.read(1)
+                        if c == "-":
+                            break
+                    else:
+                        continue
+            elif c.isalpha():
+                palavra += lst_read + c
 
 
 
