@@ -1,9 +1,8 @@
 p_reservadas = ["class", "else", "false", "fi", "if", "in", "inherits", "isvoid", "let", "loop", "pool", 
                 "then", "while", "case", "esac", "new", "of", "not", "true"]
-
-simbolos = [";", "*", ")", "{", "}", "~", "@", ".", ":", ",", "<-" "=>" , "+"] 
-
+ 
 lst_read = None
+dentro_string = False
 
 def pega_char(arq):
     global lst_read
@@ -14,19 +13,35 @@ def pega_char(arq):
     return arq.read(1)
 
 def lexico(arq):
-    global lst_read
+    global lst_read, dentro_string
     palavra = "" 
-
-    if lst_read in simbolos:
-        palavra += lst_read
-        return palavra
     
     while True:
         c = pega_char(arq)
         if not c:
             return palavra if palavra else None
+    
+        if c == '"':
+            if palavra:
+                lst_read = '"'
+                return palavra
+            dentro_string = not dentro_string
+            return c 
+        
+        if dentro_string:
+            proximo = arq.read(1)
+            if proximo == '"':
+                palavra += c
+                if proximo:
+                    arq.seek(arq.tell() - 1)
+                return palavra
+            else:
+                if proximo:
+                    arq.seek(arq.tell() - 1)
+                palavra += c
+                continue
             
-        if c.isalpha() or c.isdigit() or c == "_":
+        if c.isalpha() or c.isdigit() or c == "_" or c == ".":
             palavra += c
             continue
 
@@ -55,28 +70,7 @@ def lexico(arq):
                     arq.seek(arq.tell() - 1)
                 return "("
         
-        if c in simbolos:
-            if palavra:
-                lst_read = c
-                return palavra
-            return c
-        
-        if c == '"':
-            string = '"'
-            while True:
-                char_str = arq.read(1)
-                string += char_str
-                if not char_str: break
-                if char_str == '"': break
 
-            if palavra:
-                lst_read = string
-                return palavra
-            return string
-        
-        if palavra:
-            return palavra
-        
         if c == "-":
             proximo = pega_char(arq)
             if proximo == "-":
@@ -86,7 +80,31 @@ def lexico(arq):
                     if char_com == "\n": break
                     if palavra: return palavra
                     else: continue
+        if c == "<":
+            if palavra:
+                lst_read = "<"
+                return palavra
+            proximo = pega_char(arq)
+            if proximo == "-" : return "<-"
+            else:
+                lst_read = proximo
+                return "<"
+            
+        if c == "=":
+            if palavra:
+                lst_read = "="
+                return palavra
+            proximo = pega_char(arq)
+            if proximo == ">" : return "=>"
+            else:
+                lst_read = proximo
+                return "="
 
+        #Retorna um simbolo caso não seja uma palavra ou um caractere que requer atenção 
+        if palavra:
+            lst_read = c
+            return palavra
+        return c
 
 def main():
     with open("teste.txt", "r") as arquivo:
