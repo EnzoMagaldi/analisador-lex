@@ -237,7 +237,7 @@ class Parser:
             except SyntaxError as e:
                 self._registra_erro(str(e))
                 # Sincroniza até o próximo ';' ou 'class' para tentar
-                # parsear a próxima classe
+                # passeia a próxima classe
                 self._sincroniza(ate=(";", "class"))
         return ProgramNode(classes)
 
@@ -268,8 +268,8 @@ class Parser:
 
     #feature ::= attribute | method
     #A distinção é feita logo após o nome:
-    #ID (        → método:   ID ( formals ) : TYPE { expr } ;
-    #ID : TYPE   → atributo: ID : TYPE [ <- expr ] ;
+    #ID (        -> método:   ID ( formals ) : TYPE { expr } ;
+    #ID : TYPE   -> atributo: ID : TYPE [ <- expr ] ;
     def parse_feature(self):
         linha = self.ts.peek_linha()
         try:
@@ -333,7 +333,7 @@ class Parser:
     #parse_atom      literais, if, while, let, case, new, ID, ( expr )
     def parse_expr(self):
         """
-        Tenta parsear uma atribuição: ID <- expr
+        Tenta passear uma atribuição: ID <- expr
         Se o token seguinte ao ID não for '<-', devolve o ID com pushback
         e sobe para parse_not.
         """
@@ -571,6 +571,7 @@ class Parser:
                 args.append(self.parse_expr())
         self.ts.expect_val(")")
         return args
+
 
 def main():
     with open("teste.txt", "r") as arquivo:

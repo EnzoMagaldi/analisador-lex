@@ -13,9 +13,7 @@ tipos = {
 }
 
 identificador = []
-
 lst_read = None
-dentro_string = False
 linha = 1
 
 def pega_char(arq):
@@ -26,23 +24,42 @@ def pega_char(arq):
         return res
     return arq.read(1)
 
+def processa_palavra(palavra, linha):
+    if palavra.lower() in p_reservadas:
+        return (linha, tipos["RESERVADA"], palavra)
+    if palavra.isdigit():
+        return (linha, tipos["INTEIRO"], palavra)
+    else:
+        if palavra not in identificador:
+            identificador.append(palavra)
+        return (linha, tipos["IDENTIFICADOR"], palavra)
+
 def lexico(arq):
-    global lst_read, dentro_string, identificador, linha
+    global lst_read, identificador, linha
     palavra = "" 
     
     while True:
         c = pega_char(arq)
         if not c:
-            return palavra if palavra else None
+            if palavra:
+                return processa_palavra(palavra, linha)
+            return None
 
         if c == "\n":
             linha += 1
 
+        if c.isalpha() or c.isdigit() or c == "_":
+            palavra += c
+            continue
+        
+        if palavra:
+            lst_read = c
+            return processa_palavra(palavra, linha)
+
+        if c.isspace():
+            continue
+
         if c == '"':
-            if palavra:
-                lst_read = '"'
-                return (linha, tipos["IDENTIFICADOR"], palavra)
-            # Consome tudo até o próximo '"' e retorna como STRING
             conteudo = ""
             while True:
                 ch = arq.read(1)
@@ -53,100 +70,74 @@ def lexico(arq):
                 conteudo += ch
             return (linha, tipos["STRING"], conteudo)
         
-        if dentro_string:
-            proximo = arq.read(1)
-            if proximo == '"':
-                palavra += c
-                if proximo:
-                    arq.seek(arq.tell() - 1)
-                return (linha, tipos["STRING"], palavra)
-            else:
-                if proximo:
-                    arq.seek(arq.tell() - 1)
-                palavra += c
-                continue
-            
-        if c.isalpha() or c.isdigit() or c == "_" or c == ".":
-            palavra += c
-            continue
-        
-        if c.isspace():
-            if palavra.lower() in p_reservadas:
-                return (linha, tipos["RESERVADA"],palavra)
-            if palavra.isdigit():
-                return (linha, tipos["INTEIRO"], palavra)
-            elif palavra:
-                if palavra not in identificador:
-                    identificador.append(palavra)
-                return (linha, tipos["IDENTIFICADOR"], palavra)
-            continue
-        
         if c == "(":
             proximo = pega_char(arq)
             if proximo == "*":
-                while True:
+                profundidade = 1
+                ultimo = ""
+                while profundidade > 0:
                     char_com = arq.read(1)
-                    if not char_com: break
-                    if char_com == "*":
-                        if arq.read(1) == ")": break
-                    if palavra: return palavra
-                    else: continue
+                    if not char_com:
+                        break
+                    if char_com == "\n":
+                        linha += 1
+                    if ultimo == "(" and char_com == "*":
+                        profundidade += 1
+                        ultimo = ""
+                    elif ultimo == "*" and char_com == ")":
+                        profundidade -= 1
+                        ultimo = ""
+                    else:
+                        ultimo = char_com
+                continue 
             else:
-                if palavra: #Caso não seja comentário
-                    lst_read = "(" 
-                    if proximo:
-                        arq.seek(arq.tell() - 1) 
-                    return (linha, tipos["IDENTIFICADOR"], palavra)
-                if proximo:
-                    arq.seek(arq.tell() - 1)
+                lst_read = proximo
                 return (linha, tipos["SIMBOLO"], "(")
-        
 
         if c == "-":
             proximo = pega_char(arq)
             if proximo == "-":
                 while True:
                     char_com = arq.read(1)
-                    if not char_com: break
-                    if char_com == "\n": break
-                    if palavra: return palavra
-                    else: continue
+                    if not char_com or char_com == "\n":
+                        if char_com == "\n":
+                            linha += 1
+                        break
+                continue  
+            else:
+                lst_read = proximo
+                return (linha, tipos["OPERADOR"], "-")
                     
         if c == "<":
-            if palavra:
-                lst_read = "<"
-                return palavra
             proximo = pega_char(arq)
-            if proximo == "-" : return (linha, tipos["SIMBOLO"] ,"<-")
+            if proximo == "-":
+                return (linha, tipos["SIMBOLO"], "<-")
             else:
                 lst_read = proximo
-                return (linha, tipos["OPERADOR"], c)
+                return (linha, tipos["OPERADOR"], "<")
             
         if c == "=":
-            if palavra:
-                lst_read = "="
-                return palavra
             proximo = pega_char(arq)
-            if proximo == ">" : return (linha, tipos["SIMBOLO"] ,"=>")
+            if proximo == ">":
+                return (linha, tipos["SIMBOLO"], "=>")
             else:
                 lst_read = proximo
-                return (linha, tipos["OPERADOR"], c)
+                return (linha, tipos["OPERADOR"], "=")
 
         if c in operador:
             return (linha, tipos["OPERADOR"], c)
 
-        #Retorna um simbolo caso não seja uma palavra ou um caractere que requer atenção 
         return (linha, tipos["SIMBOLO"], c)
 
-
-'''        
-def main():
-    with open("teste.txt", "r") as arquivo:
-
-        p = lexico(arquivo)
-        while(p):
-            print(p)
-            p = lexico(arquivo)
+'''def main():
+    try:
+        with open("teste.txt", "r") as arquivo:
+            token = lexico(arquivo)
+            while token:
+                print(token)
+                token = lexico(arquivo)
+    except FileNotFoundError:
+        print("Arquivo teste.txt não encontrado.")
         
-main()
-'''
+if __name__ == "__main__":
+    main()'''
