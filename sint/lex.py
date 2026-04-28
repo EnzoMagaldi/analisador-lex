@@ -17,16 +17,20 @@ lst_read = None
 linha = 1
 
 def pega_char(arq):
-    global lst_read
+    global lst_read, linha
     if lst_read:
         res = lst_read
         lst_read = None
         return res
-    return arq.read(1)
+    
+    c = arq.read(1)
+    if c == "\n":
+        linha += 1 # Incrementa apenas quando lê do disco
+    return c
 
 def processa_palavra(palavra, linha):
     if palavra.lower() in p_reservadas:
-        return (linha, tipos["RESERVADA"], palavra)
+        return (linha, tipos["RESERVADA"], palavra.lower())
     if palavra.isdigit():
         return (linha, tipos["INTEIRO"], palavra)
     else:
@@ -44,9 +48,6 @@ def lexico(arq):
             if palavra:
                 return processa_palavra(palavra, linha)
             return None
-
-        if c == "\n":
-            linha += 1
 
         if c.isalpha() or c.isdigit() or c == "_":
             palavra += c
