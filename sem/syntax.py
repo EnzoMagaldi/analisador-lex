@@ -1,6 +1,13 @@
+import sys
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, List, Any
 from lex import lexico, tipos
+
+if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    sys.modules["syntax"] = sys.modules[__name__]
 
 @dataclass
 class ProgramNode:
@@ -140,7 +147,6 @@ class TokenStream:
         self._carregar(arquivo)
 
     def _carregar(self, arquivo):
-        """Lê todos os tokens do lexer de uma vez e normaliza para tupla."""
         while True:
             tok = lexico(arquivo)
             if tok is None:
@@ -149,19 +155,16 @@ class TokenStream:
                 self._tokens.append(tok)
 
     def peek(self):
-        """Retorna o próximo token sem consumir. None se acabou."""
         if self._pos < len(self._tokens):
             return self._tokens[self._pos]
         return None
 
     def consume(self):
-        """Consome e retorna o próximo token."""
         tok = self.peek()
         self._pos += 1
         return tok
 
     def pushback(self):
-        """Vai pra atrás até o último token consumido."""
         self._pos -= 1
 
     def peek_val(self):
@@ -183,7 +186,6 @@ class TokenStream:
         return self.peek_tipo() == tipo
 
     def expect_val(self, valor):
-        """Consome o token esperado pelo valor ou lança SyntaxError."""
         tok = self.consume()
         if tok is None or tok[2] != valor:
             encontrado = tok[2] if tok else "fim do arquivo"
@@ -194,7 +196,6 @@ class TokenStream:
         return tok
 
     def expect_tipo(self, tipo):
-        """Consome o token esperado pelo tipo ou lança SyntaxError."""
         tok = self.consume()
         if tok is None or tok[1] != tipo:
             encontrado = f"{tok[1]}('{tok[2]}')" if tok else "fim do arquivo"
@@ -207,23 +208,41 @@ class TokenStream:
 class Parser:
     def __init__(self, ts: TokenStream):
         self.ts = ts
-        self.erros = []   # acumula todos os erros encontrados
-
+        self.erros = []
 
     def _registra_erro(self, mensagem):
-        """Adiciona um erro à lista sem interromper o parsing."""
         self.erros.append(mensagem)
 
     def _sincroniza(self, ate=(";")):
         """
-        Avança tokens até encontrar um dos símbolos de sincronização.
-        Isso permite que o parser retome após um erro e continue
-        reportando outros erros mais adiante no código.
+        Avança tokens até encontrar um símbolo seguro de retomada (agora funcional).
         """
+        prof_chaves   = 0   # rastreia { }
+        prof_parenteses = 0 # rastreia ( )
+
         while self.ts.peek() is not None:
-            if self.ts.peek_val() in ate:
+            val = self.ts.peek_val()
+
+            if val == "{":
+                prof_chaves += 1
+            elif val == "}":
+                if prof_chaves > 0:
+                    prof_chaves -= 1
+                else:
+                    if "}" in ate:
+                        self.ts.consume()
+                        break
+                    break
+            elif val == "(":
+                prof_parenteses += 1
+            elif val == ")":
+                if prof_parenteses > 0:
+                    prof_parenteses -= 1
+
+            if prof_chaves == 0 and prof_parenteses == 0 and val in ate:
                 self.ts.consume()
                 break
+
             self.ts.consume()
 
     #program ::= class+
@@ -236,11 +255,9 @@ class Parser:
                     classes.append(c)
             except SyntaxError as e:
                 self._registra_erro(str(e))
-                # Sincroniza até o próximo ';' ou 'class' para tentar
-                # passeia a próxima classe
                 self._sincroniza(ate=(";", "class"))
         return ProgramNode(classes)
-
+ 
     #class ::= CLASS TYPE [ INHERITS TYPE ] { feature* } ;
     def parse_class(self):
         linha = self.ts.peek_linha()
@@ -266,10 +283,7 @@ class Parser:
 
         return ClassNode(name, parent, features, linha)
 
-    #feature ::= attribute | method
-    #A distinção é feita logo após o nome:
-    #ID (        -> método:   ID ( formals ) : TYPE { expr } ;
-    #ID : TYPE   -> atributo: ID : TYPE [ <- expr ] ;
+    #feature ::= attribute | method  
     def parse_feature(self):
         linha = self.ts.peek_linha()
         try:
@@ -277,10 +291,8 @@ class Parser:
             name = tok_name[2]
 
             if self.ts.is_val("("):
-                # É método — o ": TYPE" vem depois dos parênteses
                 return self._parse_method_resto(name, linha)
             else:
-                # É atributo — o ": TYPE" vem logo após o nome
                 self.ts.expect_val(":")
                 tok_type = self.ts.expect_tipo(tipos["IDENTIFICADOR"])
                 return self._parse_atributo_resto(name, tok_type[2], linha)
@@ -307,7 +319,7 @@ class Parser:
                 self.ts.consume()
                 formals.append(self._parse_formal())
         self.ts.expect_val(")")
-        self.ts.expect_val(":")           # ": TYPE" vem depois do ")"
+        self.ts.expect_val(":")
         tok_ret = self.ts.expect_tipo(tipos["IDENTIFICADOR"])
         self.ts.expect_val("{")
         body = self.parse_expr()
@@ -315,37 +327,22 @@ class Parser:
         self.ts.expect_val(";")
         return MethodNode(name, formals, tok_ret[2], body, linha)
 
-    # formal ::= ID : TYPE
     def _parse_formal(self):
         tok_name = self.ts.expect_tipo(tipos["IDENTIFICADOR"])
         self.ts.expect_val(":")
         tok_type = self.ts.expect_tipo(tipos["IDENTIFICADOR"])
         return FormalNode(tok_name[2], tok_type[2])
 
-    #Expressões: hierarquia de precedência (menor → maior)
-    #parse_expr      atribuição <-
-    #parse_not       NOT
-    #parse_compare   < <= =
-    #parse_add       + -
-    #parse_mul       * /
-    #parse_unary     ~ isvoid
-    #parse_dispatch  . @
-    #parse_atom      literais, if, while, let, case, new, ID, ( expr )
     def parse_expr(self):
-        """
-        Tenta passear uma atribuição: ID <- expr
-        Se o token seguinte ao ID não for '<-', devolve o ID com pushback
-        e sobe para parse_not.
-        """
         if self.ts.is_tipo(tipos["IDENTIFICADOR"]):
             linha = self.ts.peek_linha()
             tok = self.ts.consume()
             if self.ts.is_val("<-"):
                 self.ts.consume()
-                value = self.parse_expr()   # associa à direita
+                value = self.parse_expr()
                 return AssignNode(tok[2], value, linha)
             else:
-                self.ts.pushback()       # não era atribuição
+                self.ts.pushback()
         return self.parse_not()
 
     def parse_not(self):
@@ -356,7 +353,6 @@ class Parser:
         return self.parse_compare()
 
     def parse_compare(self):
-        """< <= = são não-associativos em COOL — não encadeiam."""
         left = self.parse_add()
         if self.ts.peek_val() in ("<", "<=", "="):
             linha = self.ts.peek_linha()
@@ -394,7 +390,6 @@ class Parser:
         return self.parse_dispatch()
 
     def parse_dispatch(self):
-        """Dispatch encadeia à esquerda: expr.m(args) ou expr@T.m(args)"""
         left = self.parse_atom()
         while self.ts.is_val(".") or self.ts.is_val("@"):
             linha = self.ts.peek_linha()
@@ -409,13 +404,12 @@ class Parser:
         return left
 
     def parse_atom(self):
-        """Nível mais alto de precedência — literais e construções atômicas."""
         tok = self.ts.peek()
         if tok is None:
             raise SyntaxError("Fim inesperado do arquivo")
 
-        val  = tok[2]
-        tipo = tok[1]
+        val   = tok[2]
+        tipo  = tok[1]
         linha = tok[0]
 
         if val == "if":    return self._parse_if()
@@ -455,7 +449,6 @@ class Parser:
 
         if tipo == tipos["IDENTIFICADOR"]:
             self.ts.consume()
-            # ID seguido de '(' é dispatch sobre self
             if self.ts.is_val("("):
                 args = self._parse_arglist()
                 return SelfDispatchNode(val, args, linha)
@@ -463,7 +456,6 @@ class Parser:
 
         raise SyntaxError(f"[Linha {linha}] Token inesperado: '{val}'")
 
-    #if ::= IF expr THEN expr ELSE expr FI
     def _parse_if(self):
         linha = self.ts.peek_linha()
         self.ts.expect_val("if")
@@ -475,7 +467,6 @@ class Parser:
         self.ts.expect_val("fi")
         return IfNode(cond, then_, else_, linha)
 
-    #while ::= WHILE expr LOOP expr POOL
     def _parse_while(self):
         linha = self.ts.peek_linha()
         self.ts.expect_val("while")
@@ -485,7 +476,6 @@ class Parser:
         self.ts.expect_val("pool")
         return WhileNode(cond, body, linha)
 
-    #block ::= { expr ; (expr ;)* }
     def _parse_block(self):
         linha = self.ts.peek_linha()
         self.ts.expect_val("{")
@@ -500,20 +490,17 @@ class Parser:
         self.ts.expect_val("}")
         return BlockNode(exprs, linha)
 
-    # let ::= LET ID:TYPE [<- expr] (, ID:TYPE [<- expr])* IN expr
     def _parse_let(self):
         linha = self.ts.peek_linha()
         self.ts.expect_val("let")
         bindings = []
 
-        #Primeira declaração (obrigatória)
         try:
             bindings.append(self._parse_let_binding())
         except SyntaxError as e:
             self._registra_erro(str(e))
             self._sincroniza(ate=(",", "in"))
 
-        #Declarações adicionais separadas por vírgula
         while self.ts.is_val(","):
             self.ts.consume()
             try:
@@ -527,7 +514,6 @@ class Parser:
         return LetNode(bindings, body, linha)
 
     def _parse_let_binding(self):
-        """Uma declaração dentro do let: ID : TYPE [<- expr]"""
         tok_name = self.ts.expect_tipo(tipos["IDENTIFICADOR"])
         self.ts.expect_val(":")
         tok_type = self.ts.expect_tipo(tipos["IDENTIFICADOR"])
@@ -537,7 +523,6 @@ class Parser:
             init = self.parse_expr()
         return LetBindingNode(tok_name[2], tok_type[2], init)
 
-    #case ::= CASE expr OF (ID : TYPE => expr ;)+ ESAC
     def _parse_case(self):
         linha = self.ts.peek_linha()
         self.ts.expect_val("case")
@@ -559,7 +544,6 @@ class Parser:
         self.ts.expect_val("esac")
         return CaseNode(expr, branches, linha)
 
-    #arglist ::= ( [expr (, expr)*] )
     def _parse_arglist(self):
         self.ts.expect_val("(")
         args = []
@@ -573,18 +557,35 @@ class Parser:
 
 
 def main():
-    with open("teste.txt", "r") as arquivo:
+    from sem import AnalisadorSemantico
+    from escopo import imprimir_ast
+
+    caminho_teste = Path(__file__).with_name("teste.txt")
+    with open(caminho_teste, "r") as arquivo:
         ts = TokenStream(arquivo)
         parser = Parser(ts)
         ast = parser.parse_program()
 
-        if parser.erros:
-            print(f"\n{len(parser.erros)} erro(s) encontrado(s):\n")
-            for erro in parser.erros:
-                print(f"  {erro}")
+    # erros sintáticos
+    if parser.erros:
+        print(f"  {len(parser.erros)} erro(s) SINTÁTICO(s):")
+        for e in parser.erros:
+            print(f"  {e}")
+    else:
+        print("\n  Análise sintática: OK")
+
+    # análise semântica (só roda se não houver erros sintáticos)
+    if not parser.erros:
+        semantico = AnalisadorSemantico()
+        semantico.analisa(ast)
+
+        if semantico.erros:
+            print(f"  {len(semantico.erros)} erro(s) SEMANTICO(s):")
+            for e in semantico.erros:
+                print(f"  {e}")
         else:
-            print("Parsing concluído sem erros.\n")
-            #print(ast)
+            print("  Análise semântica: OK\n")
+            imprimir_ast(ast)
 
 if __name__ == "__main__":
     main()

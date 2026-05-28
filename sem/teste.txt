@@ -1,6 +1,6 @@
 class Main inherits IO {
-    main() Object {
-        let hello: String <- "Hello, ",
+    main(): Object {
+        let hello: Cool <- "Hello, ",
             name: String <- "",
             ending: String <- "!\n"
         in {
@@ -9,4 +9,5 @@ class Main inherits IO {
             out_string(hello.concat(name.concat(ending)));
         }
     };
+    hello <- "hi";
 };
