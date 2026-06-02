@@ -1,4 +1,5 @@
 from escopo import AnalisadorEscopo, InfoMetodo, InfoAtributo
+from tipo import AnalisadorTipo
 
 HERANCA_PADRAO = {
     "Int": "Object", "String": "Object", "Bool": "Object",
@@ -49,6 +50,10 @@ class AnalisadorSemantico:
         analisador_escopo = AnalisadorEscopo(self._heranca, self._metodos, self._atributos)
         analisador_escopo.verifica_programa(programa.classes)
         self.erros += analisador_escopo.erros
+
+        analisador_tipo = AnalisadorTipo(self._heranca, self._metodos, self._atributos)
+        analisador_tipo.verifica_programa(programa.classes)
+        self.erros += analisador_tipo.erros
 
     def _coleta_previa(self, programa):
         from syntax import MethodNode, AttributeNode

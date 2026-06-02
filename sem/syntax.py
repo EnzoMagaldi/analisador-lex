@@ -575,17 +575,17 @@ def main():
         print("\n  Análise sintática: OK")
 
     # análise semântica (só roda se não houver erros sintáticos)
-    if not parser.erros:
-        semantico = AnalisadorSemantico()
-        semantico.analisa(ast)
+    #if not parser.erros:
+    semantico = AnalisadorSemantico()
+    semantico.analisa(ast)
 
-        if semantico.erros:
-            print(f"  {len(semantico.erros)} erro(s) SEMANTICO(s):")
-            for e in semantico.erros:
-                print(f"  {e}")
-        else:
-            print("  Análise semântica: OK\n")
-            imprimir_ast(ast)
+    if semantico.erros:
+        print(f"  {len(semantico.erros)} erro(s) SEMANTICO(s):")
+        for e in semantico.erros:
+            print(f"  {e}")
+    else:
+        print("  Análise semântica: OK\n")
+        imprimir_ast(ast)
 
 if __name__ == "__main__":
     main()

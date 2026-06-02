@@ -5,7 +5,7 @@ from syntax import (
     ProgramNode, ClassNode, AttributeNode, MethodNode, FormalNode,
     AssignNode, DispatchNode, SelfDispatchNode, IfNode, WhileNode,
     BlockNode, LetBindingNode, LetNode, CaseBranchNode, CaseNode,
-    NewNode, BinOpNode, UnaryOpNode, IntNode, StrNode, BoolNode, IdNode,
+    NewNode, BinOpNode, UnaryOpNode, IntNode, StrNode, BoolNode, IdNode
 )
 
 @dataclass
@@ -65,7 +65,7 @@ class AnalisadorEscopo:
         self.erros.append(f"[Linha {linha}] Erro de escopo: {msg}")
 
     def _tipo_existe(self, tipo: str) -> bool:
-        return tipo in self._heranca or tipo in self._metodos
+        return tipo == "SELF_TYPE" or tipo in self._heranca or tipo in self._metodos
 
     def verifica_programa(self, classes):
         for cls in classes:
@@ -81,8 +81,7 @@ class AnalisadorEscopo:
         # coloca atributos da classe no escopo
         for nome, info in self._atributos.get(cls.name, {}).items():
             if not self._tipo_existe(info.tipo):
-                self._erro(info.linha,
-                    f"Tipo '{info.tipo}' do atributo '{nome}' não existe")
+                self._erro(info.linha, f"Tipo '{info.tipo}' do atributo '{nome}' não existe")
             self._escopo.define(nome, info.tipo)
 
         for feat in cls.features:
@@ -94,7 +93,7 @@ class AnalisadorEscopo:
         self._escopo.sai()
 
     def _verifica_atributo_corpo(self, attr):
-        """Verifica se o corpo da inicialização usa nomes válidos."""
+        # verifica se o corpo da inicialização usa nomes validos.
         if attr.init is not None:
             self._verifica_expr_escopo(attr.init)
 
@@ -103,16 +102,12 @@ class AnalisadorEscopo:
         self._escopo.entra()
         for formal in met.formals:
             if not self._tipo_existe(formal.type_):
-                self._erro(met.linha,
-                    f"Tipo '{formal.type_}' do parâmetro '{formal.name}' "
-                    f"no método '{met.name}' não existe")
+                self._erro(met.linha, f"Tipo '{formal.type_}' do parâmetro '{formal.name}' "f"no método '{met.name}' não existe")
             self._escopo.define(formal.name, formal.type_)
 
         # verifica o tipo de retorno
         if not self._tipo_existe(met.return_type):
-            self._erro(met.linha,
-                f"Tipo de retorno '{met.return_type}' do método "
-                f"'{met.name}' não existe")
+            self._erro(met.linha, f"Tipo de retorno '{met.return_type}' do método "f"'{met.name}' não existe")
 
         self._verifica_expr_escopo(met.body)
         self._escopo.sai()
