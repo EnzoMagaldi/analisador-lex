@@ -1,0 +1,8 @@
+para rodar o .bril diretamente :
+
+ Get-Content -Raw fim.bril | bril2json | brili
+
+
+para transformar o código em bril:
+ 
+ python codegen_bril.py teste3.cool --formato bril -o fim.bril

@@ -1,0 +1,17 @@
+@main(): int {
+  v0: int = const 2;
+  v1: int = const 2;
+  v2: bool = lt v0 v1;
+  br v2 .then_0 .else_1;
+  .then_0:
+  v4: int = const 10;
+  v3: int = id v4;
+  jmp .endif_2;
+  .else_1:
+  v5: int = const 20;
+  v3: int = id v5;
+  jmp .endif_2;
+  .endif_2:
+  print v3;
+  ret v3;
+}
